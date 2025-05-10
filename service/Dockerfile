@@ -1,5 +1,5 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# Force Docker to use the linux/amd64 architecture
+FROM python:3.11-slim-buster
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1

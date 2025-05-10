@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   client:
+    platform: linux/amd64
     build:
       context: ./client
       dockerfile: Dockerfile
@@ -20,6 +21,7 @@ services:
     container_name: tech-eval-client
 
   service:
+    platform: linux/amd64
     build:
       context: ./service
       dockerfile: Dockerfile
