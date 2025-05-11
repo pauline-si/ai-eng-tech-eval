@@ -8,7 +8,7 @@ export default function TodoList({ todos, setTodos }) {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && inputValue.trim() !== "") {
-      setTodos([...todos, { id: Date.now(), text: inputValue, status: "pending" }])
+      setTodos([...todos, { id: crypto.randomUUID(), text: inputValue, status: "pending" }]) // continue using unique IDs
       setInputValue("")
     }
   }

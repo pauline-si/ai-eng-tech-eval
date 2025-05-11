@@ -27,10 +27,14 @@ function App() {
       .then((response) => response.json())
       .then((data) => {
         setMessages((prevMessages) => [...prevMessages, data.response])
-        setTodos(data.updated_todo_list)
+        setTodos(
+          data.updated_todo_list.map((todo) => ({
+            ...todo,
+            id: crypto.randomUUID(), // Changed this to force unique ID
+          }))
+        )
         handlePlayAudio(data.response)
-        
-      })
+    })
       .catch((error) => {
         console.error("Error sending message:", error)
       })
