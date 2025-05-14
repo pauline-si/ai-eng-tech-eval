@@ -67,7 +67,42 @@ SHOPIFY_FUNCTION_SCHEMAS = [
             "required": [],
         },
     },
+    {
+        "name": "list_products",
+        "description": "List products from the Shopify store and return a human-readable list of product titles and prices.",
+        "parameters": {
+            "type": "object",
+            "properties": {} # Takes no input
+            },
+            "required": []  
+    },
+    {
+        "name": "add_product",
+        "description": "Add a new product to the Shopify store.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "price": {"type": "string"},
+                "image_url": {"type": "string"},
+            },
+            "required": ["title", "price"]
+        }
+    },
+    {
+        "name": "remove_product",
+        "description": "Remove a product from Shopify using its ID.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string",
+                    "description": "The ID of the product to remove" # Added this description
+                }
+            },
+            "required": ["product_id"]
+        }
+    }
 ]
-
 
 FUNCTION_SCHEMAS = SHOPIFY_FUNCTION_SCHEMAS

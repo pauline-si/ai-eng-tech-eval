@@ -29,7 +29,7 @@ async def chat_endpoint(
 
     return ChatResponse(
         response=result.get("response", ""),
-        updated_todo_list=result.get("todo_list", []),
+        updated_todo_list = result.get("todo_list", []),
         error=result.get("error", ""),
     )
 

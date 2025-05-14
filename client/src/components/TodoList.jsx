@@ -56,8 +56,17 @@ export default function TodoList({ todos, setTodos }) {
                 onChange={() => toggleTodo(todo.id)}
                 className="h-5 w-5 text-blue-600 rounded mr-3 cursor-pointer"
               />
+              {/* Optional image if available */}
+              {todo.image && (
+                <img
+                  src={todo.image}
+                  alt={todo.text}
+                  className="w-10 h-10 object-cover rounded mr-3"
+                />
+              )}
               <span className={`${todo.status === "done" ? "line-through text-gray-400" : "text-gray-800"}`}>{todo.text}</span>
             </div>
+            
             <button
               onClick={() => deleteTodo(todo.id)}
               className="text-red-500 hover:text-red-700 focus:outline-none"

@@ -17,7 +17,7 @@ function App() {
 
   const handleSendMessage = (message) => {
     setMessages((prevMessages) => [...prevMessages, message])
-    fetch("http://0.0.0.0:8000/api/chat", {
+    fetch("http://localhost:8000/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -27,12 +27,12 @@ function App() {
       .then((response) => response.json())
       .then((data) => {
         setMessages((prevMessages) => [...prevMessages, data.response])
-        setTodos(
-          data.updated_todo_list.map((todo) => ({
-            ...todo,
-            id: crypto.randomUUID(), // Changed this to force unique ID
-          }))
-        )
+        setTodos(prevTodos => {
+          const newTasks = data.updated_todo_list.filter(
+            newItem => !prevTodos.some(existing => existing.id === newItem.id)
+          );
+          return [...prevTodos, ...newTasks];
+        });
         handlePlayAudio(data.response)
     })
       .catch((error) => {
@@ -46,7 +46,7 @@ function App() {
         audioRef.current.pause()
         audioRef.current.currentTime = 0
       }
-      fetch("http://0.0.0.0:8000/api/chat/audio", {
+      fetch("http://localhost:8000/api/chat/audio", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -74,7 +74,7 @@ function App() {
     const handleVoiceMessage = async (audioBlob) => {
       const formData = new FormData()
       formData.append("audio", audioBlob, "audio.webm")
-      const response = await fetch("http://0.0.0.0:8000/api/chat/transcribe", {
+      const response = await fetch("http://localhost:8000/api/chat/transcribe", {
         method: "POST",
         body: formData,
       })
