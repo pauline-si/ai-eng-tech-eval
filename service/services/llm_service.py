@@ -1,5 +1,6 @@
 """
-LLM service that will handle interactions with an LLM
+LLM service with hybrid memory: combines GPT for interpreting user input
+and a local Python dictionary for structured memory (e.g., last added/deleted product).
 """
 
 from openai import OpenAI
@@ -17,6 +18,9 @@ from services.function_schemas import FUNCTION_SCHEMAS
 from utils.prompt_builder import SYSTEM_PROMPT
 import json
 
+# Shared memory outside the class to keep data between user requests
+memory = {}
+
 RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
@@ -33,7 +37,7 @@ RESPONSE_FORMAT = {
                         "properties": {
                             "text": {"type": "string"},
                             "status": {"type": "string"},
-                            "image": {"type": "string"}  # Optional image field
+                            "image": {"type": "string"},
                         },
                         "required": ["text", "status"],
                         "additionalProperties": False,
@@ -43,15 +47,11 @@ RESPONSE_FORMAT = {
             "required": ["response", "todo_list"],
             "additionalProperties": False,
         },
-        # "strict": True,
     },
 }
 
 
 def format_list_products_response(result):
-    """
-    Returns a human-readable list of products from a Shopify response.
-    """
     if not isinstance(result, dict) or "products" not in result:
         return f"Shopify error: {result.get('error', 'Unknown error')}"
 
@@ -87,32 +87,42 @@ class OpenAILLMService:
             "remove_product": remove_product,
             "list_products": list_products,
         }
+        self.message_history = [{"role": "system", "content": SYSTEM_PROMPT}]
+        self.memory = memory  # Hybrid memory dictionary
+        print("!!!! Current memory content:", self.memory)
+
 
     def get_response(self, prompt: str) -> dict:
+        self.message_history.append({"role": "user", "content": prompt})
+
+        # Handle hybrid memory queries before calling GPT
+        if "what product did I just add" in prompt.lower():
+            last_product = self.memory.get("last_added_product")
+            if last_product:
+                response = f"The last product added was '{last_product['title']}' with price ${last_product['price']} and ID {last_product['id']}."
+            else:
+                response = "I couldn't find a record of the last added product."
+            return {"response": response, "todo_list": []}
+
+        if "what product did i just delete" in prompt.lower():
+            last_deleted = self.memory.get("last_deleted_product")
+            if last_deleted:
+                response = f"The last product deleted was '{last_deleted['title']}' with ID {last_deleted['id']}."
+            else:
+                response = "I couldn't find a record of the last deleted product."
+            return {"response": response, "todo_list": []}
+
+        # Otherwise proceed with GPT and function calling
         try:
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
             while True:
-                try:
-                    # print("!!!! Sending prompt to LLM:", json.dumps(messages, indent=2))
-                    completion = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        functions=FUNCTION_SCHEMAS,
-                        function_call="auto",
-                        response_format=RESPONSE_FORMAT,
-                    )
-
-                    message = completion.choices[0].message
-
-                except Exception as api_error:
-                    print(f"Error contacting LLM: {api_error}")
-                    return {
-                        "response": "Seems like I have encountered an error! Please check your configuration and .env file!",
-                        "todo_list": [],
-                    }
+                completion = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=self.message_history,
+                    functions=FUNCTION_SCHEMAS,
+                    function_call="auto",
+                    response_format=RESPONSE_FORMAT,
+                )
+                message = completion.choices[0].message
 
                 if hasattr(message, "function_call") and message.function_call:
                     func_name = message.function_call.name
@@ -120,70 +130,56 @@ class OpenAILLMService:
                     func = self.fn_map.get(func_name)
 
                     if func:
-                        result = func(**args)
-                        if not result:
-                            result = {"error": "Function returned no data."}  
+                        result = func(**args) or {"error": "Function returned no data."}
+                        self.message_history.append({
+                            "role": "function",
+                            "name": func_name,
+                            "content": json.dumps(result),
+                        })
 
-                        # Special case for add_product to return todo item with image
-                        if func_name == "add_product" and isinstance(result, dict):
-                            product_title = result.get("title", "Unnamed Product")
+                        # Store result in hybrid memory
+                        if func_name == "add_product" and not result.get("error"):
+                            self.memory["last_added_product"] = result
+
+                            # Add a todo item with the image manually
                             todo_item = {
-                                "text": f"Add product '{product_title}' to Shopify",
-                                "status": "done",
+                                "text": f"Add product '{result['title']}' to Shopify",
+                                "status": "done"
                             }
                             if result.get("image"):
                                 todo_item["image"] = result["image"]
 
-                            messages.append(
-                                {
-                                    "role": "function",
-                                    "name": func_name,
-                                    "content": json.dumps(result),
-                                }
-                            )
+                            print(" !!!! Stored in memory:", self.memory["last_added_product"])
 
                             return {
-                                "response": f"I've added the product '{product_title}' to Shopify!",
-                                "todo_list": [todo_item],
+                                "response": (
+                                    f"The product '{result['title']}' with a price of ${result['price']} "
+                                    f"and the specified image has been added to the store successfully."
+                                ),
+                                "todo_list": [todo_item]
                             }
-                        
-                        if func_name == "list_products":
-                            # print("!!!!! Raw result from list_products():", result) 
-                            return {
-                                "response": format_list_products_response(result),  
-                                "todo_list": []
-                            }                  
 
-                        messages.append(
-                            {
-                                "role": "function",
-                                "name": func_name,
-                                "content": json.dumps(result),
-                            }
+                        elif func_name == "remove_product" and not result.get("error"):
+                            self.memory["last_deleted_product"] = result
+
+                        # Let GPT summarize other cases
+                        followup = self.client.chat.completions.create(
+                            model=self.model,
+                            messages=self.message_history,
+                            response_format=RESPONSE_FORMAT
                         )
-
-                        return {
-                            "response": f"Executed '{func_name}' successfully.",
-                            "todo_list": []
-                        }
-
+                        reply = followup.choices[0].message
+                        self.message_history.append({"role": "assistant", "content": reply.content})
+                        return json.loads(reply.content)
                     else:
-                        result = {"error": f"Unknown function: {func_name}"}
-                        messages.append(
-                            {
-                                "role": "function",
-                                "name": func_name,
-                                "content": json.dumps(result),
-                            }
-                        )
+                        return {"response": f"Unknown function: {func_name}", "todo_list": []}
 
                 else:
-                    try:
-                        return json.loads(message.content)
-                    except Exception:
-                        return {"response": message.content, "todo_list": None}
+                    self.message_history.append({"role": "assistant", "content": message.content})
+                    return json.loads(message.content)
+
         except Exception as e:
-            return {"response": f"Error contacting LLM: {e}", "todo_list": []}
+            return {"response": f"Unexpected error: {e}", "todo_list": []}
 
     def text_to_speech(self, text: str, output_path: Path) -> Path:
         try:
@@ -204,5 +200,4 @@ class OpenAILLMService:
             )
             return transcription.text
         except Exception as e:
-            print(f"Error in speech_to_text: {e}")
             raise RuntimeError(f"Speech-to-text failed: {e}")

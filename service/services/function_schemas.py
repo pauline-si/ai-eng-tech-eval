@@ -72,9 +72,14 @@ SHOPIFY_FUNCTION_SCHEMAS = [
         "description": "List products from the Shopify store and return a human-readable list of product titles and prices.",
         "parameters": {
             "type": "object",
-            "properties": {} # Takes no input
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of products to list, e.g., 3 or 10."
+                }
             },
             "required": []  
+        },
     },
     {
         "name": "add_product",
@@ -87,7 +92,7 @@ SHOPIFY_FUNCTION_SCHEMAS = [
                 "image_url": {"type": "string"},
             },
             "required": ["title", "price"]
-        }
+        },
     },
     {
         "name": "remove_product",

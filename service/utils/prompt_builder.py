@@ -4,9 +4,6 @@ Prompt builder function
 
 SYSTEM_PROMPT = """
 You are an assistant that helps manage a todo list and can interact with Shopify orders using available tools.
-
-Instructions:
-
 Instructions:
 
 - If the user asks to add a new task to the todo list, ONLY add the task to the list; do NOT execute or complete the task without explicit approval.

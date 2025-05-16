@@ -12,7 +12,7 @@ const startingTodos = [
 
 function App() {
   const [messages, setMessages] = useState([])
-  const [todos, setTodos] = useState(startingTodos) 
+  const [todos, setTodos] = useState(startingTodos)
   const audioRef = useRef(null)
 
   const handleSendMessage = (message) => {
@@ -22,67 +22,70 @@ function App() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, todo_list: todos })
+      body: JSON.stringify({
+        message,
+        todo_list: todos,
+      }),
     })
       .then((response) => response.json())
       .then((data) => {
-        setMessages((prevMessages) => [...prevMessages, data.response])
-        setTodos(prevTodos => {
-          const newTasks = data.updated_todo_list.filter(
-            newItem => !prevTodos.some(existing => existing.id === newItem.id)
-          );
-          return [...prevTodos, ...newTasks];
-        });
-        handlePlayAudio(data.response)
-    })
+        setMessages((prevMessages) => [...prevMessages, data.response]);
+        setTodos(prev => [
+          ...prev,
+          ...data.updated_todo_list
+            .filter(item => !prev.some(t => t.text === item.text))
+            .map(item => ({ ...item, id: crypto.randomUUID() }))
+        ]);
+        handlePlayAudio(data.response);
+      })
       .catch((error) => {
         console.error("Error sending message:", error)
       })
   }
-    // Play audio for a specific message
-    const handlePlayAudio = (text) => {
-      // Stop any currently playing audio
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-      fetch("http://localhost:8000/api/chat/audio", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text })
+  // Play audio for a specific message
+  const handlePlayAudio = (text) => {
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+    fetch("http://localhost:8000/api/chat/audio", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text })
+    })
+      .then((response) => response.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audioRef.current = audio
+        audio.play()
       })
-        .then((response) => response.blob())
-        .then((blob) => {
-          const url = URL.createObjectURL(blob)
-          const audio = new Audio(url)
-          audioRef.current = audio
-          audio.play()
-        })
-    }
+  }
 
-    // Stop audio playback
-    const handleStopAudio = () => {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
+  // Stop audio playback
+  const handleStopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
     }
+  }
 
-    // Transcribe voice input
-    const handleVoiceMessage = async (audioBlob) => {
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "audio.webm")
-      const response = await fetch("http://localhost:8000/api/chat/transcribe", {
-        method: "POST",
-        body: formData,
-      })
-      const data = await response.json()
-      if (data.text) {
-        handleSendMessage(data.text)
-      }
+  // Transcribe voice input
+  const handleVoiceMessage = async (audioBlob) => {
+    const formData = new FormData()
+    formData.append("audio", audioBlob, "audio.webm")
+    const response = await fetch("http://localhost:8000/api/chat/transcribe", {
+      method: "POST",
+      body: formData,
+    })
+    const data = await response.json()
+    if (data.text) {
+      handleSendMessage(data.text)
     }
+  }
 
   return (
     <div className="container justify-self-center mt-4">

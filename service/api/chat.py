@@ -24,8 +24,9 @@ def get_llm_service():
 async def chat_endpoint(
     request: ChatRequest, llm_service: OpenAILLMService = Depends(get_llm_service)
 ):
-    prompt = build_prompt(request.message, request.todo_list)
-    result = llm_service.get_response(prompt)
+    prompt = request.message
+
+    result = llm_service.get_response(prompt) # Can be UUID later
 
     return ChatResponse(
         response=result.get("response", ""),

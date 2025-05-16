@@ -144,10 +144,14 @@ def remove_product(product_id: str) -> dict:
 
 
 def list_products(limit: int = 5) -> dict:
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 5  # fallback in case LLM sends a weird value
     """
     List recent products from Shopify.
     """
-    url = f"https://{SHOP_URL}/admin/api/{API_VERSION}/products.json?limit={limit}"
+    url = f"https://{SHOP_URL}/admin/api/{API_VERSION}/products.json?limit={limit}&order=created_at desc"
     try:
         resp = requests.get(url, headers=HEADERS, verify=False)
         resp.raise_for_status()
