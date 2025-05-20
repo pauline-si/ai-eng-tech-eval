@@ -1,6 +1,9 @@
 """
-Functions to be used as tools for the LLM to interact with Shopify's API and a mocked development store
+Functions used by the assistant to interact with the Shopify API.
+
+Each function corresponds to an action GPT might trigger (add, list, or remove orders/products).
 """
+
 
 import requests
 from config import settings
@@ -145,13 +148,15 @@ def remove_product(product_id: str) -> dict:
 
 def list_products(limit: int = 5) -> dict:
     try:
-        limit = int(limit)
+        limit = int(limit) # Convert limit to integer in case passed as a string
     except Exception:
-        limit = 5  # fallback in case LLM sends a weird value
+        limit = 5  # Fallback if parsing fails
+
     """
     List recent products from Shopify.
     """
-    url = f"https://{SHOP_URL}/admin/api/{API_VERSION}/products.json?limit={limit}&order=created_at desc"
+    # Added `order=created_at desc` 
+    url = f"https://{SHOP_URL}/admin/api/{API_VERSION}/products.json?limit={limit}&order=created_at desc" # 
     try:
         resp = requests.get(url, headers=HEADERS, verify=False)
         resp.raise_for_status()

@@ -7,9 +7,10 @@ from config import settings
 import uuid
 from pathlib import Path
 
+# Initialize FastAPI router for /api/chat endpoints
 router = APIRouter()
 
-
+# Helper function to configure the LLM service
 def get_llm_service():
     return OpenAILLMService(
         api_key=settings.OPENAI_API_KEY,
@@ -19,15 +20,16 @@ def get_llm_service():
         stt_model=settings.TRANSCRIPTION_MODEL,
     )
 
-
 @router.post("/api/chat", response_model=ChatResponse)
+# Main Chat Endpoint
 async def chat_endpoint(
     request: ChatRequest, llm_service: OpenAILLMService = Depends(get_llm_service)
 ):
-    prompt = request.message
+    user_message = request.message # Get message from frontend
 
-    result = llm_service.get_response(prompt) # Can be UUID later
+    result = llm_service.get_response(user_message) # Could support UUID later for multi-user memory
 
+    # Return response to frontend
     return ChatResponse(
         response=result.get("response", ""),
         updated_todo_list = result.get("todo_list", []),

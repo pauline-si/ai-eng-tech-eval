@@ -102,7 +102,7 @@ SHOPIFY_FUNCTION_SCHEMAS = [
             "properties": {
                 "product_id": {
                     "type": "string",
-                    "description": "The ID of the product to remove" # Added this description
+                    "description": "The ID of the product to remove" 
                 }
             },
             "required": ["product_id"]

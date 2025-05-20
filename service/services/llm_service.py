@@ -15,11 +15,12 @@ from utils.shopify_utils import (
     list_products,
 )
 from services.function_schemas import FUNCTION_SCHEMAS
-from utils.prompt_builder import SYSTEM_PROMPT
+from utils.prompt_builder import SYSTEM_PROMPT, build_prompt
 import json
 
-# Shared memory outside the class to keep data between user requests
+# Shared memory and message history outside the class to keep data between user requests
 memory = {}
+message_history = [{"role": "system", "content": SYSTEM_PROMPT}]
 
 RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -50,35 +51,20 @@ RESPONSE_FORMAT = {
     },
 }
 
-
-def format_list_products_response(result):
-    if not isinstance(result, dict) or "products" not in result:
-        return f"Shopify error: {result.get('error', 'Unknown error')}"
-
-    products = result["products"]
-    if not products:
-        return "There are no products in the store."
-
-    lines = ["Latest products:"]
-    for p in products:
-        lines.append(f"- {p['title']} (ID: {p['id']}, Price: {p['price']})")
-    return "\n".join(lines)
-
-
 class OpenAILLMService:
-    def __init__(
-        self,
-        api_key: str,
-        model: str,
-        tts_model: str = "tts-1",
-        voice: str = "alloy",
-        stt_model="gpt-4o-transcribe",
-    ):
-        self.model = model
+    def __init__(self, api_key: str, model: str,
+                 tts_model: str = "tts-1",
+                 voice: str = "alloy",
+                 stt_model: str = "gpt-4o-transcribe"):
         self.client = OpenAI(api_key=api_key)
+        self.model = model
         self.tts_model = tts_model
         self.voice = voice
         self.stt_model = stt_model
+        self.message_history = message_history
+        self.memory = memory
+
+         # Maps function names from OpenAI to actual Python functions
         self.fn_map = {
             "add_order": add_order,
             "remove_order": remove_order,
@@ -87,42 +73,26 @@ class OpenAILLMService:
             "remove_product": remove_product,
             "list_products": list_products,
         }
-        self.message_history = [{"role": "system", "content": SYSTEM_PROMPT}]
-        self.memory = memory  # Hybrid memory dictionary
-        print("!!!! Current memory content:", self.memory)
 
-
-    def get_response(self, prompt: str) -> dict:
+    def get_response(self, user_message: str) -> dict:
+        prompt = build_prompt(user_message, todo_list=[], memory=self.memory)
         self.message_history.append({"role": "user", "content": prompt})
 
-        # Handle hybrid memory queries before calling GPT
-        if "what product did I just add" in prompt.lower():
-            last_product = self.memory.get("last_added_product")
-            if last_product:
-                response = f"The last product added was '{last_product['title']}' with price ${last_product['price']} and ID {last_product['id']}."
-            else:
-                response = "I couldn't find a record of the last added product."
-            return {"response": response, "todo_list": []}
+        #print("\n Current message history:")
+        #for i, msg in enumerate(self.message_history):
+            #print(f"{i+1}. {msg}")
 
-        if "what product did i just delete" in prompt.lower():
-            last_deleted = self.memory.get("last_deleted_product")
-            if last_deleted:
-                response = f"The last product deleted was '{last_deleted['title']}' with ID {last_deleted['id']}."
-            else:
-                response = "I couldn't find a record of the last deleted product."
-            return {"response": response, "todo_list": []}
-
-        # Otherwise proceed with GPT and function calling
         try:
             while True:
+                # Ask GPT to reply or call a function if needed
                 completion = self.client.chat.completions.create(
                     model=self.model,
                     messages=self.message_history,
                     functions=FUNCTION_SCHEMAS,
-                    function_call="auto",
+                    function_call="auto",  # GPT decide if it should call a function or just respond
                     response_format=RESPONSE_FORMAT,
                 )
-                message = completion.choices[0].message
+                message = completion.choices[0].message #Take GPT's first reply
 
                 if hasattr(message, "function_call") and message.function_call:
                     func_name = message.function_call.name
@@ -137,19 +107,17 @@ class OpenAILLMService:
                             "content": json.dumps(result),
                         })
 
-                        # Store result in hybrid memory
+                        # Store in memory and send as todo
                         if func_name == "add_product" and not result.get("error"):
                             self.memory["last_added_product"] = result
+                            print("!!!!!Stored in memory:", result)
 
-                            # Add a todo item with the image manually
                             todo_item = {
                                 "text": f"Add product '{result['title']}' to Shopify",
                                 "status": "done"
                             }
                             if result.get("image"):
                                 todo_item["image"] = result["image"]
-
-                            print(" !!!! Stored in memory:", self.memory["last_added_product"])
 
                             return {
                                 "response": (
@@ -158,11 +126,12 @@ class OpenAILLMService:
                                 ),
                                 "todo_list": [todo_item]
                             }
-
+                        
+                        # Store in memory
                         elif func_name == "remove_product" and not result.get("error"):
                             self.memory["last_deleted_product"] = result
 
-                        # Let GPT summarize other cases
+                        # Send function result back to GPT for final user response    
                         followup = self.client.chat.completions.create(
                             model=self.model,
                             messages=self.message_history,
@@ -173,7 +142,8 @@ class OpenAILLMService:
                         return json.loads(reply.content)
                     else:
                         return {"response": f"Unknown function: {func_name}", "todo_list": []}
-
+                    
+                # If no function used, just return a reply
                 else:
                     self.message_history.append({"role": "assistant", "content": message.content})
                     return json.loads(message.content)

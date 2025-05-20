@@ -69,14 +69,18 @@ Assistant response:
 }
 """
 
+def build_prompt(message: str, todo_list: list[dict] | None, memory: dict | None = None) -> str:
+    """
+    Build a prompt string for GPT, combining:
+    - The current todo list
+    - Any memory context (e.g., last product added/deleted)
+    - The latest user message
+    """
 
-def build_prompt(message: str, todo_list: list[dict] | None) -> str:
-    """
-    Build a prompt for the LLM, providing the user's message and the current todo list.
-    The LLM should decide which tasks are Shopify-related and use available tools if needed.
-    When updating the todo list, it should only change the status of tasks (e.g., to 'done'), never remove tasks.
-    """
-    prompt = "Here is the current todo list. Each task has a 'text' and a 'status' (either 'pending' or 'done'):\n"
+    # Start with header
+    prompt = "Here is the current todo list:\n"
+
+    # List current todos with status
     if todo_list:
         for idx, todo in enumerate(todo_list, 1):
             task_text = todo.get("text", "Missing task text")
@@ -85,6 +89,21 @@ def build_prompt(message: str, todo_list: list[dict] | None) -> str:
     else:
         prompt += "Empty!\n"
 
-    prompt += f"\nUser message: {message}\n"
-
+    # Add structured memory context if available 
+    if memory:
+        if memory.get("last_added_product"):
+            p = memory["last_added_product"]
+            if "title" in p:
+               prompt += f"\nFor reference: Last product added was '{p['title']}' (ID: {p.get('id', 'unknown')}, Price: ${p.get('price', 'unknown')})."
+            else:
+                 prompt += f"\nFor reference: Last product added ID: {p.get('id', 'unknown')}."
+                
+        if memory.get("last_deleted_product"):
+            d = memory["last_deleted_product"]
+            if "title" in d:
+                prompt += f"\nLast product deleted was '{d['title']}' (ID: {d['id']})."
+            else:
+                prompt += f"\nLast product deleted ID: {d.get('id', 'unknown')}."
+                
+    prompt += f"\n\nUser message: {message}\n"
     return prompt

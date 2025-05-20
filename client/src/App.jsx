@@ -11,10 +11,12 @@ const startingTodos = [
 ]
 
 function App() {
+  // Track chat messages & todo items by storing
   const [messages, setMessages] = useState([])
   const [todos, setTodos] = useState(startingTodos)
   const audioRef = useRef(null)
 
+  // Sends user input to the backend and handles the response
   const handleSendMessage = (message) => {
     setMessages((prevMessages) => [...prevMessages, message])
     fetch("http://localhost:8000/api/chat", {
@@ -29,12 +31,14 @@ function App() {
     })
       .then((response) => response.json())
       .then((data) => {
+        // Add assistant's response to chat history
         setMessages((prevMessages) => [...prevMessages, data.response]);
+        // Update the todo list
         setTodos(prev => [
           ...prev,
           ...data.updated_todo_list
-            .filter(item => !prev.some(t => t.text === item.text))
-            .map(item => ({ ...item, id: crypto.randomUUID() }))
+            .filter(item => !prev.some(t => t.text === item.text)) // Avoid duplicates
+            .map(item => ({ ...item, id: crypto.randomUUID() })) // assign unique ID
         ]);
         handlePlayAudio(data.response);
       })
